@@ -61,7 +61,7 @@ DEPENDENCIES:
 - lasio: LAS file parsing and integration
 - dataclasses: Type-safe data structures
 - pathlib: Modern file system operations
-
+ 
 AUTHOR: FTS Engineering Team
 VERSION: 2.0
 LAST_UPDATED: 2025
@@ -82,15 +82,16 @@ from typing import List, Optional
 import logging
 import pathlib
 
-# Third-party imports for UI, data analysis, and visualization
+
+
+# Third-party imports for UI and numerical analysis
 import flet as ft
-import lasio
 import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.io as pio
-from plotly.subplots import make_subplots
-from flet.plotly_chart import PlotlyChart
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import io
+import base64
 
 # ====================================================================
 # CONFIGURATION AND SETUP
@@ -331,72 +332,6 @@ def load_points_from_file(
         return []
 
 
-def load_las_file(file_path: str) -> tuple[pd.DataFrame, list[str], str]:
-    """Load LAS file and return dataframe, available curves, and well name"""
-    las = lasio.read(file_path)
-    df = las.df()
-
-    # Find TVD column - common names for TVD in LAS files
-    tvd_columns = ["TVD", "TVDSS", "TVD_SS", "TVDMSL", "TVD_MSL", "DEPTH_TVD"]
-    tvd_column = None
-
-    # Check if any TVD column exists in the dataframe
-    for col in tvd_columns:
-        if col in df.columns:
-            tvd_column = col
-            break
-
-    # If no TVD column found, check if index is already TVD or use index as TVD
-    if tvd_column is None:
-        # Use the index as TVD (assuming it's depth)
-        df = df.reset_index()
-        tvd_column = df.columns[0]  # First column is usually depth
-        logger.info("No TVD column found, using %s as TVD", tvd_column)
-
-    # Set TVD as index
-    df = df.set_index(tvd_column)
-    wellname = las.well.WELL.value if hasattr(las.well, "WELL") else "Unknown Well"
-
-    # Check units and convert to feet if necessary
-    depth_unit = None
-
-    # Check well header for depth units
-    if hasattr(las.well, "STRT") and hasattr(las.well.STRT, "unit"):
-        depth_unit = las.well.STRT.unit.lower()
-    elif hasattr(las.well, "STOP") and hasattr(las.well.STOP, "unit"):
-        depth_unit = las.well.STOP.unit.lower()
-
-    # Also check curve header for TVD column units
-    if tvd_column in las.curves:
-        curve_unit = (
-            las.curves[tvd_column].unit.lower() if las.curves[tvd_column].unit else None
-        )
-        if curve_unit:
-            depth_unit = curve_unit
-
-    # Convert meters to feet if necessary
-    if (
-        depth_unit
-        and ("m" in depth_unit or "meter" in depth_unit)
-        and "ft" not in depth_unit
-    ):
-        logger.info(
-            "Converting TVD from meters to feet (original unit: %s)", depth_unit
-        )
-        df.index = df.index * 3.28084  # Convert meters to feet
-        logger.info(
-            "TVD range after conversion: %.1f to %.1f ft",
-            df.index.min(),
-            df.index.max(),
-        )
-    else:
-        logger.info("TVD units: %s", depth_unit or "Unknown (assuming feet)")
-        logger.info("TVD range: %.1f to %.1f ft", df.index.min(), df.index.max())
-
-    # Get list of available curves (column names, excluding TVD)
-    curves = [col for col in df.columns if col != tvd_column]
-
-    return df, curves, wellname
 
 
 def save_app_state(
@@ -463,76 +398,45 @@ def load_app_state(filename: str = "app_state.json") -> Optional[AppState]:
         return None
 
 
+
 def create_empty_plot():
-    """Create empty three-panel plot with shared Y-axis"""
-    fig = make_subplots(
-        rows=1,
-        cols=3,
-        column_widths=[0.50, 0.25, 0.25],
-        shared_yaxes=True,
-        subplot_titles=("Pressure vs TVD", "Log", "Statistics"),
-        horizontal_spacing=0.05,
-    )
+    # Returns a placeholder for the Flet chart area
+    return ft.Container(ft.Text("Add pressure points to view plot", color=BRAND_GRAY, size=18), alignment=ft.alignment.center, height=400)
 
-    # Add placeholder text for pressure plot
-    fig.add_annotation(
-        x=0.5,
-        y=0.5,
-        xref="x1",
-        yref="paper",
-        text="Add pressure points<br>to view plot",
-        showarrow=False,
-        font=dict(size=12, color=BRAND_GRAY),
-        xanchor="center",
-        yanchor="middle",
-    )
-
-    # Add placeholder text for log plot
-    fig.add_annotation(
-        x=0.5,
-        y=0.5,
-        xref="x2",
-        yref="paper",
-        text="Load LAS<br>file to view<br>log data",
-        showarrow=False,
-        font=dict(size=10, color=BRAND_GRAY),
-        xanchor="center",
-        yanchor="middle",
-    )
-
-    # Add placeholder text for statistics panel
-    fig.add_annotation(
-        x=0.5,
-        y=0.5,
-        xref="x3",
-        yref="paper",
-        text="Statistics",
-        showarrow=False,
-        font=dict(size=10, color=BRAND_GRAY),
-        xanchor="center",
-        yanchor="middle",
-    )
-
-    # Only basic layout for empty plot
-    fig.update_layout(
-        width=1400,
-        height=800,
-        showlegend=False,
-        paper_bgcolor=BRAND_BG_COLOR,
-        plot_bgcolor=BRAND_WHITE,
-        font=dict(color=BRAND_DARK_GRAY),
-    )
-    fig.update_xaxes(gridcolor=BRAND_BORDER_COLOR)
-    fig.update_yaxes(gridcolor=BRAND_BORDER_COLOR)
-
-    return fig
-
-
-def figure_to_base64(fig):
-    """Convert plotly figure to base64 string for Flet Image"""
-    img_bytes = pio.to_image(fig, format="png", width=1400, height=1000)
-    img_base64 = base64.b64encode(img_bytes).decode()
+def render_matplotlib_plot(points, stats):
+    fig, ax = plt.subplots(figsize=(8, 6))
+    if not points:
+        ax.text(0.5, 0.5, "Add pressure points to view plot", ha="center", va="center", fontsize=14, color="gray")
+        ax.axis('off')
+    else:
+        all_tvd = [p.tvd for p in points]
+        all_pressure = [p.pressure for p in points]
+        selected = [p.selected for p in points]
+        # Plot all points
+        ax.scatter(all_pressure, all_tvd, c=["green" if s else "gray" for s in selected], s=60, label="Points")
+        # Plot regression line if available
+        if stats:
+            (slope, intercept), *_ = stats
+            tvd_range = np.array([min(all_tvd), max(all_tvd)])
+            pressure_fit = slope * tvd_range + intercept
+            ax.plot(pressure_fit, tvd_range, color="#118AB2", linewidth=2, label="Gradient Fit")
+        ax.set_xlabel("Pressure (psi)")
+        ax.set_ylabel("TVD (ft)")
+        ax.set_title("Pressure vs TVD")
+        ax.invert_yaxis()
+        ax.grid(True)
+        ax.legend()
+    buf = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode("utf-8")
     return img_base64
+
+
+
+# Removed: figure_to_base64 (no longer needed)
 
 
 def show_banner(page: ft.Page, message: str, is_error: bool = False):
@@ -684,9 +588,8 @@ class PressureGradientApp:
         self.depth_unit: ft.Dropdown
         self.pressure_unit: ft.Dropdown
         self.table: ft.DataTable
-        self.plotly_chart: PlotlyChart
-        self.curve_dropdown: ft.Dropdown
-        self.file_picker: ft.FilePicker
+        # Removed: self.plotly_chart (no longer needed)
+        # Removed: self.curve_dropdown, self.file_picker
         self.bulk_dialog: ft.AlertDialog
         self.tvd_area: ft.TextField
         self.pressure_area: ft.TextField
@@ -732,29 +635,33 @@ class PressureGradientApp:
         )
         initial_auto_zoom = self.saved_state.auto_zoom if self.saved_state else True
 
+        # Larger touch-friendly fields for mobile
         self.tvd_input = ft.TextField(
             label="TVD",
-            width=100,
-            height=40,
+            width=160,
+            height=48,
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
+            dense=False,
         )
         self.pressure_input = ft.TextField(
             label="Pressure",
-            width=100,
-            height=40,
+            width=160,
+            height=48,
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
+            dense=False,
         )
         self.zone_input = ft.TextField(
             label="Zone (Optional)",
-            width=150,
-            height=40,
+            width=180,
+            height=48,
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
+            dense=False,
         )
         self.depth_unit = ft.Dropdown(
-            width=100,
+            width=120,
             options=[
                 ft.dropdown.Option("ft", text="FT"),
                 ft.dropdown.Option("m", text="M"),
@@ -763,9 +670,10 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             on_change=self.update_table_and_page,
+            dense=False,
         )
         self.pressure_unit = ft.Dropdown(
-            width=100,
+            width=120,
             options=[
                 ft.dropdown.Option("psi", text="Psi"),
                 ft.dropdown.Option("bar", text="Bar"),
@@ -774,38 +682,43 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             on_change=self.update_table_and_page,
+            dense=False,
         )
         self.zoom_min_field = ft.TextField(
-            width=100,
-            height=40,
+            width=120,
+            height=44,
             value=self.saved_state.zoom_min if self.saved_state else "",
             label="Min TVD",
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
+            dense=False,
         )
         self.zoom_max_field = ft.TextField(
-            width=100,
-            height=40,
+            width=120,
+            height=44,
             value=self.saved_state.zoom_max if self.saved_state else "",
             label="Max TVD",
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
+            dense=False,
         )
         self.zoom_pressure_min_field = ft.TextField(
-            width=100,
-            height=40,
+            width=120,
+            height=44,
             value=self.saved_state.zoom_pressure_min if self.saved_state else "",
             label="Min Pressure",
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
+            dense=False,
         )
         self.zoom_pressure_max_field = ft.TextField(
-            width=100,
-            height=40,
+            width=120,
+            height=44,
             value=self.saved_state.zoom_pressure_max if self.saved_state else "",
             label="Max Pressure",
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
+            dense=False,
         )
         self.auto_zoom_checkbox = ft.Checkbox(
             label="Auto Zoom", value=initial_auto_zoom, check_color=BRAND_GREEN
@@ -871,40 +784,42 @@ class PressureGradientApp:
             border_color=BRAND_BORDER_COLOR,
             on_change=self.update_plot,
         )
-        self.file_picker = ft.FilePicker(on_result=self.on_las_file_picked)
-        self.page.overlay.append(self.file_picker)
+        # Removed: file_picker and related overlay
 
         self.tvd_area = ft.TextField(
             label="Paste TVD values (one per line)",
             multiline=True,
-            min_lines=5,
-            max_lines=8,
-            width=270,
+            min_lines=4,
+            max_lines=6,
+            width=220,
             expand=True,
+            dense=False,
         )
         self.pressure_area = ft.TextField(
             label="Paste pressure values (one per line)",
             multiline=True,
-            min_lines=5,
-            max_lines=8,
-            width=270,
+            min_lines=4,
+            max_lines=6,
+            width=220,
             expand=True,
+            dense=False,
         )
         self.zone_area = ft.TextField(
             label="Paste Zone Names (one per line, optional)",
             multiline=True,
-            min_lines=5,
-            max_lines=8,
-            width=270,
+            min_lines=4,
+            max_lines=6,
+            width=220,
             expand=True,
+            dense=False,
         )
-        self.plotly_chart = PlotlyChart(figure=create_empty_plot(), expand=True)
+        self.plot_container = ft.Container(content=create_empty_plot(), expand=True, padding=8)
         # Statistics card (will be updated in update_statistics_card)
         self.statistics_card = ft.Card(
             content=ft.Container(
-                content=ft.Text("Statistics will appear here.", size=14, color=BRAND_DARK_GRAY),
+                content=ft.Text("Statistics will appear here.", size=16, color=BRAND_DARK_GRAY),
                 bgcolor=BRAND_SECONDARY_BG_COLOR,
-                padding=ft.padding.all(12),
+                padding=ft.padding.all(16),
             ),
             elevation=2,
             margin=ft.margin.only(top=10, bottom=10),
@@ -915,15 +830,15 @@ class PressureGradientApp:
             content=ft.Column(
                 [
                     ft.Text(
-                        "Paste data below. Ensure TVD and Pressure have the same number of lines."
+                        "Paste data below. Ensure TVD and Pressure have the same number of lines.", size=14
                     ),
-                    ft.Row([self.tvd_area, self.pressure_area, self.zone_area]),
+                    ft.Row([self.tvd_area, self.pressure_area, self.zone_area], spacing=8),
                 ],
                 tight=True,
             ),
             actions=[
-                ft.TextButton("Add Data", on_click=self.process_bulk_data),
-                ft.TextButton("Cancel", on_click=self.close_bulk_dialog),
+                ft.TextButton("Add Data", on_click=self.process_bulk_data, style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=16, vertical=10))),
+                ft.TextButton("Cancel", on_click=self.close_bulk_dialog, style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=16, vertical=10))),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -992,123 +907,16 @@ class PressureGradientApp:
                 )
 
     def update_plot(self, _=None):
-        """Update the plot with the current data"""
+        """Update the plot with the current data using matplotlib and display as image in Flet"""
         selected_points = [p for p in self.points if p.selected]
         stats = calculate_gradient_statistics(selected_points)
 
         if not self.points:
-            fig = make_subplots(
-                rows=1,
-                cols=2,
-                column_widths=[0.67, 0.33],
-                shared_yaxes=True,
-                subplot_titles=("Pressure vs TVD", "Log"),
-                horizontal_spacing=0.05,
-            )
+            self.plot_container.content = create_empty_plot()
         else:
-            fig = make_subplots(
-                rows=1,
-                cols=2,
-                column_widths=[0.67, 0.33],
-                shared_yaxes=True,
-                subplot_titles=("Pressure vs TVD", "Log"),
-                horizontal_spacing=0.05,
-            )
-            all_tvd = [p.tvd for p in self.points]
-            all_pressure = [p.pressure for p in self.points]
-            colors = [BRAND_GREEN if p.selected else BRAND_GRAY for p in self.points]
-            fig.add_trace(
-                go.Scatter(
-                    x=all_pressure,
-                    y=all_tvd,
-                    mode="markers",
-                    marker=dict(color=colors, size=10),
-                    name="All Points",
-                    hoverinfo="text",
-                    text=[
-                        f"Zone: {p.zone} | TVD: {p.tvd:.2f} | Pressure: {p.pressure:.2f}"
-                        for p in self.points
-                    ],
-                ),
-                row=1,
-                col=1,
-            )
-            if stats:
-                (slope, intercept), density_ppg, density_gcc, r_squared, _, lower_ci, upper_ci, fluid_type = stats
-                tvd_range = np.array([min(all_tvd), max(all_tvd)])
-                pressure_fit = slope * tvd_range + intercept
-                fig.add_trace(
-                    go.Scatter(
-                        x=pressure_fit,
-                        y=tvd_range,
-                        mode="lines",
-                        line=dict(color=BRAND_ACCENT_BLUE, width=2),
-                        name="Gradient Fit",
-                    ),
-                    row=1,
-                    col=1,
-                )
-            self.update_log_subplot(self.points, fig)
+            img_base64 = render_matplotlib_plot(self.points, stats)
+            self.plot_container.content = ft.Image(src_base64=img_base64, width=800, height=500, fit=ft.ImageFit.CONTAIN)
 
-            # Update layout
-            fig.update_layout(
-                height=800,
-                showlegend=False,
-                paper_bgcolor=BRAND_BG_COLOR,
-                plot_bgcolor=BRAND_WHITE,
-                font=dict(color=BRAND_DARK_GRAY),
-            )
-
-            # Handle zoom settings
-            is_auto_zoom = self.auto_zoom_checkbox.value
-            y_range = None
-            x_range = None
-
-            if is_auto_zoom:
-                if self.points:
-                    all_tvd = [p.tvd for p in self.points]
-                    all_pressure = [p.pressure for p in self.points]
-                    tvd_min = min(all_tvd) - 5
-                    tvd_max = max(all_tvd) + 5
-                    pressure_min = min(all_pressure) - 20
-                    pressure_max = max(all_pressure) + 20
-                    y_range = [tvd_max, tvd_min] # Reversed for TVD
-                    x_range = [pressure_min, pressure_max]
-            else:
-                try:
-                    zoom_min = float(self.zoom_min_field.value) if self.zoom_min_field.value else None
-                    zoom_max = float(self.zoom_max_field.value) if self.zoom_max_field.value else None
-                    zoom_pressure_min = float(self.zoom_pressure_min_field.value) if self.zoom_pressure_min_field.value else None
-                    zoom_pressure_max = float(self.zoom_pressure_max_field.value) if self.zoom_pressure_max_field.value else None
-
-                    if zoom_min is not None and zoom_max is not None:
-                        y_range = [zoom_max, zoom_min]  # Reversed for TVD
-
-                    if zoom_pressure_min is not None and zoom_pressure_max is not None:
-                        x_range = [zoom_pressure_min, zoom_pressure_max]
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Invalid zoom input, falling back to auto-zoom. Error: {e}")
-                    # In case of error, let autorange handle it
-                    pass
-
-            fig.update_yaxes(
-                autorange="reversed" if y_range is None else None,
-                range=y_range,
-                title_text="TVD (ft)",
-                gridcolor=BRAND_BORDER_COLOR,
-                exponentformat="none",
-                separatethousands=True,
-                tickformat=".0f",
-                col=1
-            )
-            fig.update_xaxes(
-                autorange=True if x_range is None else None,
-                range=x_range,
-                title_text="Pressure (psi)", gridcolor=BRAND_BORDER_COLOR, col=1
-            )
-            fig.update_xaxes(gridcolor=BRAND_BORDER_COLOR, col=2)
-
-        self.plotly_chart.figure = fig
         self.update_statistics_card(stats, selected_points)
         self.page.update()
 
@@ -1147,136 +955,7 @@ class PressureGradientApp:
             )
         self.page.update()
 
-    def update_log_subplot(self, points, fig, tvd_plot_min=None, tvd_plot_max=None):
-        """Update the log subplot in the Plotly figure"""
-        try:
-            log_data = self.page.client_storage.get("log_data")
-            tvd_column = self.page.client_storage.get("tvd_column")
-
-            if not log_data or not tvd_column:
-                # Clear existing traces in subplot 2
-                fig.data = [trace for trace in fig.data if trace.xaxis != "x2"]
-                fig.add_annotation(
-                    x=0.5,
-                    y=0.5,
-                    xref="x2",
-                    yref="paper",
-                    text="Load LAS<br>file to view<br>log data",
-                    showarrow=False,
-                    font=dict(size=10, color="gray"),
-                    xanchor="center",
-                    yanchor="middle",
-                )
-                return
-
-            try:
-                df_records = pd.read_json(StringIO(log_data), orient="records")
-            except ValueError as e:
-                logger.error("Error parsing log_data as JSON: %s", str(e))
-                return
-            df = df_records.set_index(tvd_column)
-
-            # Ensure index is numeric
-            df.index = pd.Index(pd.to_numeric(df.index.values, errors="coerce"))
-
-            curve_name = self.curve_dropdown.value
-            if not curve_name or curve_name not in df.columns:
-                # Clear existing traces in subplot 2
-                fig.data = [trace for trace in fig.data if trace.xaxis != "x2"]
-                fig.add_annotation(
-                    x=0.5,
-                    y=0.5,
-                    xref="x2",
-                    yref="paper",
-                    text="Select a<br>log curve",
-                    showarrow=False,
-                    font=dict(size=10, color="gray"),
-                    xanchor="center",
-                    yanchor="middle",
-                )
-                return
-
-            if tvd_plot_min is None or tvd_plot_max is None:
-                if points:
-                    tvd_all = [p.tvd for p in points]
-                    tvd_plot_min = min(tvd_all) - 5
-                    tvd_plot_max = max(tvd_all) + 5
-                else:
-                    tvd_plot_min = df.index.min()
-                    tvd_plot_max = df.index.max()
-
-            df_filtered = df[(df.index >= tvd_plot_min) & (df.index <= tvd_plot_max)]
-
-            clean_df = df_filtered[[curve_name]].dropna()
-
-            # Clear existing traces in subplot 2
-            fig.data = [trace for trace in fig.data if trace.xaxis != "x2"]
-
-            if not clean_df.empty:
-                fig.add_trace(
-                    go.Scatter(
-                        x=clean_df[curve_name].values,
-                        y=clean_df.index.values,
-                        mode="lines",
-                        line=dict(color="blue", width=2),
-                        name=curve_name,
-                        showlegend=False,
-                        xaxis="x2",
-                        yaxis="y2",
-                    )
-                )
-
-            if points:
-                tvd_points = [p.tvd for p in points]
-                for tvd in tvd_points:
-                    if tvd_plot_min <= tvd <= tvd_plot_max:
-                        # Add horizontal line for pressure point
-                        if not clean_df.empty:
-                            x_min, x_max = (
-                                clean_df[curve_name].min(),
-                                clean_df[curve_name].max(),
-                            )
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=[x_min, x_max],
-                                    y=[tvd, tvd],
-                                    mode="lines",
-                                    line=dict(color="red", dash="dash", width=1),
-                                    opacity=0.5,
-                                    showlegend=False,
-                                    xaxis="x2",
-                                    yaxis="y2",
-                                )
-                            )
-
-            # Update subplot title
-            fig.layout.annotations[1].text = f"{curve_name}" if curve_name else "Log"
-            if not clean_df.empty:
-                x_min, x_max = clean_df[curve_name].min(), clean_df[curve_name].max()
-                x_range = x_max - x_min
-                if x_range > 0:
-                    fig.update_xaxes(
-                        range=[x_min - x_range * 0.1, x_max + x_range * 0.1],
-                        row=1,
-                        col=2,
-                        fixedrange=False,  # Enable zoom/pan for log subplot
-                    )
-
-        except (ValueError, TypeError, KeyError) as e:
-            logger.error("Error updating log subplot: %s", str(e))
-            # Clear existing traces in subplot 2
-            fig.data = [trace for trace in fig.data if trace.xaxis != "x2"]
-            fig.add_annotation(
-                x=0.5,
-                y=0.5,
-                xref="x2",
-                yref="paper",
-                text=f"Error:<br>{str(e)[:30]}...",
-                showarrow=False,
-                font=dict(size=8, color="red"),
-                xanchor="center",
-                yanchor="middle",
-            )
+    # Removed update_log_subplot and all log/LAS code
 
     def add_point(self, _):
         """Add a new pressure point"""
@@ -1424,53 +1103,14 @@ class PressureGradientApp:
             self.update_plot()
             self.page.update()
 
-    def on_las_file_picked(self, file_result):
-        """Handle LAS file selection"""
-        if file_result.files:
-            try:
-                file_path = file_result.files[0].path
-                df, curves, wellname = load_las_file(file_path)
+    # Removed on_las_file_picked
 
-                # Store the dataframe properly - reset index to column for JSON serialization
-                df_for_storage = df.reset_index()
-                self.page.client_storage.set(
-                    "log_data", df_for_storage.to_json(orient="records")
-                )
-                self.page.client_storage.set(
-                    "tvd_column", df_for_storage.columns[0]
-                )  # Store TVD column name
-                self.page.client_storage.set("wellname", wellname)
-                self.page.client_storage.set("curves_list", curves)
-
-                # Update curve dropdown
-                self.curve_dropdown.options = [
-                    ft.dropdown.Option(text=curve) for curve in curves
-                ]
-                self.curve_dropdown.disabled = False
-                if curves:
-                    self.curve_dropdown.value = curves[0]
-
-                # Show success message with info about loaded file
-                tvd_range = f"{df.index.min():.1f} to {df.index.max():.1f} ft"
-                show_banner(
-                    self.page,
-                    f"LAS file loaded successfully!\nTVD range: {tvd_range}\nCurves: {len(curves)}",
-                )
-                self.page.update()
-
-            except (OSError, ValueError, TypeError) as e:
-                logger.error("Error loading LAS file: %s", str(e))
-                show_banner(
-                    self.page, f"Error loading LAS file: {str(e)}", is_error=True
-                )
-
-    def ensure_filepicker_and_pick(self):
-        """Ensure FilePicker is in overlay and properly initialized before picking files"""
-        self.file_picker.pick_files(allowed_extensions=["las"], allow_multiple=False)
+    # Removed ensure_filepicker_and_pick
 
     def build(self):
-        """Build and return the UI layout"""
-        return ft.ListView(
+        """Build and return the UI layout (no LAS/log controls)"""
+        # Responsive: stack vertically on mobile, horizontally on tablet/desktop
+        return ft.Column(
             expand=True,
             controls=[
                 ft.ResponsiveRow(
@@ -1482,7 +1122,7 @@ class PressureGradientApp:
                                         "Data Input",
                                         weight=ft.FontWeight.BOLD,
                                         color=BRAND_DARK_GREEN,
-                                        size=16,
+                                        size=18,
                                     ),
                                     ft.Row(
                                         controls=[
@@ -1495,9 +1135,12 @@ class PressureGradientApp:
                                                 bgcolor=BRAND_GREEN,
                                                 icon_color=BRAND_WHITE,
                                                 tooltip="Add Point",
+                                                style=ft.ButtonStyle(padding=ft.padding.all(10)),
                                             ),
                                         ],
-                                        spacing=10,
+                                        spacing=12,
+                                        alignment=ft.MainAxisAlignment.START,
+                                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                                     ),
                                     ft.Row(
                                         controls=[
@@ -1506,28 +1149,32 @@ class PressureGradientApp:
                                                 on_click=self.open_bulk_dialog,
                                                 bgcolor=BRAND_ACCENT_BLUE,
                                                 color=BRAND_WHITE,
+                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
                                             ),
                                             ft.ElevatedButton(
                                                 "Save Points",
                                                 on_click=self.save_data,
                                                 bgcolor=BRAND_ACCENT_PURPLE,
                                                 color=BRAND_WHITE,
+                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
                                             ),
                                             ft.ElevatedButton(
                                                 "Clear All Points",
                                                 on_click=self.clear_table,
                                                 bgcolor=BRAND_ACCENT_ORANGE,
                                                 color=BRAND_WHITE,
+                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
                                             ),
                                         ],
-                                        spacing=10,
+                                        spacing=12,
+                                        alignment=ft.MainAxisAlignment.START,
                                     ),
                                     ft.Divider(),
                                     ft.Text(
                                         "Settings",
                                         weight=ft.FontWeight.BOLD,
                                         color=BRAND_DARK_GREEN,
-                                        size=16,
+                                        size=18,
                                     ),
                                     ft.Row(
                                         controls=[
@@ -1538,15 +1185,17 @@ class PressureGradientApp:
                                                 on_click=self.manual_save_state,
                                                 bgcolor=BRAND_DARK_GRAY,
                                                 color=BRAND_WHITE,
+                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
                                             ),
                                         ],
-                                        spacing=10,
+                                        spacing=12,
+                                        alignment=ft.MainAxisAlignment.START,
                                     ),
                                 ],
-                                spacing=15,
+                                spacing=18,
                             ),
-                            padding=10,
-                            border_radius=8,
+                            padding=12,
+                            border_radius=10,
                             border=ft.border.all(1, BRAND_BORDER_COLOR),
                             bgcolor=BRAND_SECONDARY_BG_COLOR,
                             col={"xs": 12, "sm": 12, "md": 6, "lg": 4, "xl": 4},
@@ -1555,23 +1204,12 @@ class PressureGradientApp:
                             content=ft.Column(
                                 controls=[
                                     ft.Text(
-                                        "Plot Controls",
+                                        "Plot",
                                         weight=ft.FontWeight.BOLD,
                                         color=BRAND_DARK_GREEN,
-                                        size=16,
+                                        size=18,
                                     ),
-                                    ft.Row(
-                                        controls=[
-                                            ft.ElevatedButton(
-                                                "Load LAS File",
-                                                on_click=lambda _: self.ensure_filepicker_and_pick(),
-                                                bgcolor=BRAND_GREEN,
-                                                color=BRAND_WHITE,
-                                            ),
-                                            self.curve_dropdown,
-                                        ],
-                                        spacing=10,
-                                    ),
+                                    self.plot_container,
                                     ft.Row(
                                         controls=[
                                             self.zoom_min_field,
@@ -1579,7 +1217,8 @@ class PressureGradientApp:
                                             self.zoom_pressure_min_field,
                                             self.zoom_pressure_max_field,
                                         ],
-                                        spacing=10,
+                                        spacing=12,
+                                        alignment=ft.MainAxisAlignment.START,
                                     ),
                                     ft.Row(
                                         controls=[
@@ -1589,23 +1228,24 @@ class PressureGradientApp:
                                                 on_click=self.update_plot,
                                                 bgcolor=BRAND_ACCENT_BLUE,
                                                 color=BRAND_WHITE,
+                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
                                             ),
                                         ],
-                                        spacing=10,
+                                        spacing=12,
+                                        alignment=ft.MainAxisAlignment.START,
                                     ),
                                 ],
-                                spacing=15,
+                                spacing=18,
                             ),
-                            padding=10,
-                            border_radius=8,
+                            padding=12,
+                            border_radius=10,
                             border=ft.border.all(1, BRAND_BORDER_COLOR),
                             bgcolor=BRAND_SECONDARY_BG_COLOR,
                             col={"xs": 12, "sm": 12, "md": 6, "lg": 4, "xl": 4},
                         ),
                     ],
-                    spacing=20,
+                    spacing=16,
                     alignment=ft.MainAxisAlignment.CENTER,
-                    # Removed run_spacing and wrap for Flet compatibility
                 ),
                 ft.Divider(),
                 ft.ResponsiveRow(
@@ -1614,32 +1254,22 @@ class PressureGradientApp:
                             content=ft.Column([
                                 self.table
                             ], scroll=ft.ScrollMode.ALWAYS),
-                            border_radius=8,
-                            padding=10,
-                            col={"xs": 12, "sm": 12, "md": 12, "lg": 4, "xl": 4},
-                        ),
-                        ft.Container(
-                            content=ft.Column([
-                                self.plotly_chart
-                            ], scroll=ft.ScrollMode.ALWAYS),
-                            expand=True,
-                            border_radius=8,
-                            border=ft.border.all(1, BRAND_CHART_BORDER_COLOR),
+                            border_radius=10,
+                            padding=12,
                             col={"xs": 12, "sm": 12, "md": 12, "lg": 4, "xl": 4},
                         ),
                         ft.Container(
                             content=self.statistics_card,
-                            border_radius=8,
-                            padding=10,
+                            border_radius=10,
+                            padding=12,
                             col={"xs": 12, "sm": 12, "md": 12, "lg": 4, "xl": 4},
                         ),
                     ],
                     expand=True,
-                    spacing=20,
-                    # Removed run_spacing and wrap for Flet compatibility
+                    spacing=16,
                 ),
             ],
-            spacing=20,
+            spacing=16,
         )
 
 
@@ -1656,10 +1286,13 @@ def create_pressure_gradient_app(page: ft.Page, shared_data: dict):
 def main(page: ft.Page):
     shared_data = {}
     page.title = "Pressure Gradient Analysis Toolkit"
-    page.window_width = 1600
-    page.window_height = 1000
+    # Responsive: let Flet handle window size for mobile/tablet
     page.bgcolor = BRAND_BG_COLOR
     page.scroll = ft.ScrollMode.ALWAYS
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.padding = 10
+    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+    page.vertical_alignment = ft.MainAxisAlignment.START
     app_view = create_pressure_gradient_app(page, shared_data)
     page.add(app_view)
 

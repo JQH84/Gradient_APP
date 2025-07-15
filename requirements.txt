@@ -5,3 +5,4 @@ numpy
 lasio
 scipy
 kaleido
+matplotlib
