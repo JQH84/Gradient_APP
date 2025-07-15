@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: gradient-app-jqh
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python src/main.py
-    plan: free

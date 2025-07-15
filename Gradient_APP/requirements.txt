@@ -1,6 +1,0 @@
-flet
-plotly
-pandas
-numpy
-lasio
-scipy
