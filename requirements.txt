@@ -4,3 +4,4 @@ pandas
 numpy
 lasio
 scipy
+kaleido

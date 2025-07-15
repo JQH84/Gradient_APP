@@ -101,6 +101,9 @@ from flet.plotly_chart import PlotlyChart
 LOG_PATH = pathlib.Path(__file__).parent.parent / "logs" / "pressure_gradient_app.log"
 DATA_PATH = pathlib.Path(__file__).parent.parent / "storage" / "data"
 
+# Ensure logs directory exists
+LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 # Configure module-specific logging (per-page log file)
 logger = logging.getLogger("pressure_gradient_app")
 if not logger.hasHandlers():
