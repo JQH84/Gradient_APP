@@ -829,6 +829,15 @@ class PressureGradientApp:
             expand=True,
             dense=False,
         )
+        self.smart_bulk_area = ft.TextField(
+            label="Smart Bulk Paste: Paste TVD and Pressure columns (tab, comma, or space separated)",
+            multiline=True,
+            min_lines=4,
+            max_lines=8,
+            width=460,
+            expand=True,
+            dense=False,
+        )
         self.plot_container = ft.Container(content=create_empty_plot(), expand=True, padding=8)
         # Statistics card (will be updated in update_statistics_card)
         self.statistics_card = ft.Card(
@@ -846,18 +855,59 @@ class PressureGradientApp:
             content=ft.Column(
                 [
                     ft.Text(
-                        "Paste data below. Ensure TVD and Pressure have the same number of lines.", size=14
+                        "Paste data below. Ensure TVD and Pressure have the same number of lines, or use Smart Bulk Paste for two-column input.", size=14
                     ),
                     ft.Row([self.tvd_area, self.pressure_area, self.zone_area], spacing=8),
+                    ft.Text("OR", size=12, color=BRAND_GRAY),
+                    self.smart_bulk_area,
                 ],
                 tight=True,
             ),
             actions=[
                 ft.TextButton("Add Data", on_click=self.process_bulk_data, style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=16, vertical=10))),
+                ft.TextButton("Add Smart Bulk", on_click=self.process_smart_bulk_data, style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=16, vertical=10))),
                 ft.TextButton("Cancel", on_click=self.close_bulk_dialog, style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=16, vertical=10))),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
+
+    def process_smart_bulk_data(self, _):
+        """Process smart bulk input: two columns (TVD, Pressure) per line, separated by tab, comma, or space."""
+        try:
+            lines = self.smart_bulk_area.value.strip().split("\n") if self.smart_bulk_area.value else []
+            new_points = []
+            for line in lines:
+                # Accept tab, comma, or space as separator
+                if "\t" in line:
+                    parts = line.split("\t")
+                elif "," in line:
+                    parts = line.split(",")
+                else:
+                    parts = line.split()
+                if len(parts) < 2:
+                    continue
+                try:
+                    tvd_val = float(parts[0].strip())
+                    pressure_val = float(parts[1].strip())
+                    internal_tvd = convert_depth(tvd_val, self.depth_unit.value or "ft", "ft")
+                    internal_pressure = convert_pressure(pressure_val, self.pressure_unit.value or "psi", "psi")
+                    new_points.append(PressurePoint(zone="", tvd=internal_tvd, pressure=internal_pressure))
+                except ValueError:
+                    continue
+            if new_points:
+                self.points.extend(new_points)
+                self.shared_data["pressure_points"] = self.points
+                self.smart_bulk_area.value = ""
+                self.update_table()
+                self.update_plot()
+                self.close_bulk_dialog()
+                show_banner(self.page, f"Added {len(new_points)} points from smart bulk paste!")
+                self.page.update()
+            else:
+                show_banner(self.page, "No valid data found in smart bulk paste!")
+        except Exception as ex:
+            logger.error("Error processing smart bulk data: %s", str(ex))
+            show_banner(self.page, f"Error processing smart bulk data: {str(ex)}")
 
     def update_table_and_page(self, _=None):
         """Update table and refresh the page"""
