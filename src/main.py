@@ -1109,164 +1109,170 @@ class PressureGradientApp:
 
     def build(self):
         """Build and return the UI layout (no LAS/log controls)"""
-        # Responsive: stack vertically on mobile, horizontally on tablet/desktop
+        # Data controls above, plot below, both in a responsive row
+        data_controls = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text(
+                        "Data Input",
+                        weight=ft.FontWeight.BOLD,
+                        color=BRAND_DARK_GREEN,
+                        size=18,
+                    ),
+                    ft.Row(
+                        controls=[
+                            self.zone_input,
+                            self.tvd_input,
+                            self.pressure_input,
+                            ft.IconButton(
+                                icon=ft.Icons.ADD,
+                                on_click=self.add_point,
+                                bgcolor=BRAND_GREEN,
+                                icon_color=BRAND_WHITE,
+                                tooltip="Add Point",
+                                style=ft.ButtonStyle(padding=ft.padding.all(10)),
+                            ),
+                        ],
+                        spacing=12,
+                        alignment=ft.MainAxisAlignment.START,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        controls=[
+                            ft.ElevatedButton(
+                                "Bulk Add",
+                                on_click=self.open_bulk_dialog,
+                                bgcolor=BRAND_ACCENT_BLUE,
+                                color=BRAND_WHITE,
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                            ),
+                            ft.ElevatedButton(
+                                "Save Points",
+                                on_click=self.save_data,
+                                bgcolor=BRAND_ACCENT_PURPLE,
+                                color=BRAND_WHITE,
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                            ),
+                            ft.ElevatedButton(
+                                "Clear All Points",
+                                on_click=self.clear_table,
+                                bgcolor=BRAND_ACCENT_ORANGE,
+                                color=BRAND_WHITE,
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                            ),
+                        ],
+                        spacing=12,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                    ft.Divider(),
+                    ft.Text(
+                        "Settings",
+                        weight=ft.FontWeight.BOLD,
+                        color=BRAND_DARK_GREEN,
+                        size=18,
+                    ),
+                    ft.Row(
+                        controls=[
+                            self.depth_unit,
+                            self.pressure_unit,
+                            ft.ElevatedButton(
+                                "Save App State",
+                                on_click=self.manual_save_state,
+                                bgcolor=BRAND_DARK_GRAY,
+                                color=BRAND_WHITE,
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                            ),
+                        ],
+                        spacing=12,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                ],
+                spacing=18,
+            ),
+            padding=12,
+            border_radius=10,
+            border=ft.border.all(1, BRAND_BORDER_COLOR),
+            bgcolor=BRAND_SECONDARY_BG_COLOR,
+            expand=True,
+        )
+
+        plot_area = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text(
+                        "Plot",
+                        weight=ft.FontWeight.BOLD,
+                        color=BRAND_DARK_GREEN,
+                        size=18,
+                    ),
+                    self.plot_container,
+                    ft.Row(
+                        controls=[
+                            self.zoom_min_field,
+                            self.zoom_max_field,
+                            self.zoom_pressure_min_field,
+                            self.zoom_pressure_max_field,
+                        ],
+                        spacing=12,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                    ft.Row(
+                        controls=[
+                            self.auto_zoom_checkbox,
+                            ft.ElevatedButton(
+                                "Update Plot",
+                                on_click=self.update_plot,
+                                bgcolor=BRAND_ACCENT_BLUE,
+                                color=BRAND_WHITE,
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                            ),
+                        ],
+                        spacing=12,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                ],
+                spacing=18,
+            ),
+            padding=12,
+            border_radius=10,
+            border=ft.border.all(1, BRAND_BORDER_COLOR),
+            bgcolor=BRAND_SECONDARY_BG_COLOR,
+            expand=True,
+        )
+
+        # Second row: left column (table + results), right column (plot)
+        left_col = ft.Container(
+            content=ft.Column([
+                ft.Column([
+                    self.table,
+                    self.statistics_card
+                ], spacing=16, expand=True)
+            ], expand=True),
+            border_radius=10,
+            padding=12,
+            col={"xs": 12, "sm": 12, "md": 12, "lg": 5, "xl": 5},
+        )
+        right_col = ft.Container(
+            content=plot_area,
+            border_radius=10,
+            padding=12,
+            col={"xs": 12, "sm": 12, "md": 12, "lg": 7, "xl": 7},
+        )
+
         return ft.Column(
             expand=True,
             controls=[
                 ft.ResponsiveRow(
-                    controls=[
-                        ft.Container(
-                            content=ft.Column(
-                                controls=[
-                                    ft.Text(
-                                        "Data Input",
-                                        weight=ft.FontWeight.BOLD,
-                                        color=BRAND_DARK_GREEN,
-                                        size=18,
-                                    ),
-                                    ft.Row(
-                                        controls=[
-                                            self.zone_input,
-                                            self.tvd_input,
-                                            self.pressure_input,
-                                            ft.IconButton(
-                                                icon=ft.Icons.ADD,
-                                                on_click=self.add_point,
-                                                bgcolor=BRAND_GREEN,
-                                                icon_color=BRAND_WHITE,
-                                                tooltip="Add Point",
-                                                style=ft.ButtonStyle(padding=ft.padding.all(10)),
-                                            ),
-                                        ],
-                                        spacing=12,
-                                        alignment=ft.MainAxisAlignment.START,
-                                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                                    ),
-                                    ft.Row(
-                                        controls=[
-                                            ft.ElevatedButton(
-                                                "Bulk Add",
-                                                on_click=self.open_bulk_dialog,
-                                                bgcolor=BRAND_ACCENT_BLUE,
-                                                color=BRAND_WHITE,
-                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
-                                            ),
-                                            ft.ElevatedButton(
-                                                "Save Points",
-                                                on_click=self.save_data,
-                                                bgcolor=BRAND_ACCENT_PURPLE,
-                                                color=BRAND_WHITE,
-                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
-                                            ),
-                                            ft.ElevatedButton(
-                                                "Clear All Points",
-                                                on_click=self.clear_table,
-                                                bgcolor=BRAND_ACCENT_ORANGE,
-                                                color=BRAND_WHITE,
-                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
-                                            ),
-                                        ],
-                                        spacing=12,
-                                        alignment=ft.MainAxisAlignment.START,
-                                    ),
-                                    ft.Divider(),
-                                    ft.Text(
-                                        "Settings",
-                                        weight=ft.FontWeight.BOLD,
-                                        color=BRAND_DARK_GREEN,
-                                        size=18,
-                                    ),
-                                    ft.Row(
-                                        controls=[
-                                            self.depth_unit,
-                                            self.pressure_unit,
-                                            ft.ElevatedButton(
-                                                "Save App State",
-                                                on_click=self.manual_save_state,
-                                                bgcolor=BRAND_DARK_GRAY,
-                                                color=BRAND_WHITE,
-                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
-                                            ),
-                                        ],
-                                        spacing=12,
-                                        alignment=ft.MainAxisAlignment.START,
-                                    ),
-                                ],
-                                spacing=18,
-                            ),
-                            padding=12,
-                            border_radius=10,
-                            border=ft.border.all(1, BRAND_BORDER_COLOR),
-                            bgcolor=BRAND_SECONDARY_BG_COLOR,
-                            col={"xs": 12, "sm": 12, "md": 6, "lg": 4, "xl": 4},
-                        ),
-                        ft.Container(
-                            content=ft.Column(
-                                controls=[
-                                    ft.Text(
-                                        "Plot",
-                                        weight=ft.FontWeight.BOLD,
-                                        color=BRAND_DARK_GREEN,
-                                        size=18,
-                                    ),
-                                    self.plot_container,
-                                    ft.Row(
-                                        controls=[
-                                            self.zoom_min_field,
-                                            self.zoom_max_field,
-                                            self.zoom_pressure_min_field,
-                                            self.zoom_pressure_max_field,
-                                        ],
-                                        spacing=12,
-                                        alignment=ft.MainAxisAlignment.START,
-                                    ),
-                                    ft.Row(
-                                        controls=[
-                                            self.auto_zoom_checkbox,
-                                            ft.ElevatedButton(
-                                                "Update Plot",
-                                                on_click=self.update_plot,
-                                                bgcolor=BRAND_ACCENT_BLUE,
-                                                color=BRAND_WHITE,
-                                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
-                                            ),
-                                        ],
-                                        spacing=12,
-                                        alignment=ft.MainAxisAlignment.START,
-                                    ),
-                                ],
-                                spacing=18,
-                            ),
-                            padding=12,
-                            border_radius=10,
-                            border=ft.border.all(1, BRAND_BORDER_COLOR),
-                            bgcolor=BRAND_SECONDARY_BG_COLOR,
-                            col={"xs": 12, "sm": 12, "md": 6, "lg": 4, "xl": 4},
-                        ),
-                    ],
+                    controls=[data_controls],
                     spacing=16,
                     alignment=ft.MainAxisAlignment.CENTER,
                 ),
                 ft.Divider(),
                 ft.ResponsiveRow(
-                    controls=[
-                        ft.Container(
-                            content=ft.Column([
-                                self.table
-                            ], scroll=ft.ScrollMode.ALWAYS),
-                            border_radius=10,
-                            padding=12,
-                            col={"xs": 12, "sm": 12, "md": 12, "lg": 4, "xl": 4},
-                        ),
-                        ft.Container(
-                            content=self.statistics_card,
-                            border_radius=10,
-                            padding=12,
-                            col={"xs": 12, "sm": 12, "md": 12, "lg": 4, "xl": 4},
-                        ),
-                    ],
+                    controls=[left_col, right_col],
                     expand=True,
                     spacing=16,
+                    alignment=ft.MainAxisAlignment.START,
                 ),
             ],
             spacing=16,
