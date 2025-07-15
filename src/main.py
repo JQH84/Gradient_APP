@@ -1139,6 +1139,13 @@ class PressureGradientApp:
                         controls=[
                             self.zone_input,
                             self.tvd_input,
+                        ],
+                        spacing=4,
+                        alignment=ft.MainAxisAlignment.START,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        controls=[
                             self.pressure_input,
                             ft.IconButton(
                                 icon=ft.Icons.ADD,
@@ -1228,6 +1235,12 @@ class PressureGradientApp:
                         controls=[
                             self.zoom_min_field,
                             self.zoom_max_field,
+                        ],
+                        spacing=12,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                    ft.Row(
+                        controls=[
                             self.zoom_pressure_min_field,
                             self.zoom_pressure_max_field,
                         ],
