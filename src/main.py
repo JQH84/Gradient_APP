@@ -643,6 +643,8 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             dense=False,
+            text_size=13,
+            label_style=ft.TextStyle(size=11),
         )
         self.pressure_input = ft.TextField(
             label="Pressure",
@@ -651,6 +653,8 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             dense=False,
+            text_size=13,
+            label_style=ft.TextStyle(size=11),
         )
         self.zone_input = ft.TextField(
             label="Zone (Optional)",
@@ -659,6 +663,8 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             dense=False,
+            text_size=13,
+            label_style=ft.TextStyle(size=11),
         )
         self.depth_unit = ft.Dropdown(
             width=120,
@@ -671,6 +677,7 @@ class PressureGradientApp:
             border_color=BRAND_BORDER_COLOR,
             on_change=self.update_table_and_page,
             dense=False,
+            text_size=13,
         )
         self.pressure_unit = ft.Dropdown(
             width=120,
@@ -683,6 +690,7 @@ class PressureGradientApp:
             border_color=BRAND_BORDER_COLOR,
             on_change=self.update_table_and_page,
             dense=False,
+            text_size=13,
         )
         self.zoom_min_field = ft.TextField(
             width=120,
@@ -692,6 +700,8 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             dense=False,
+            text_size=13,
+            label_style=ft.TextStyle(size=11),
         )
         self.zoom_max_field = ft.TextField(
             width=120,
@@ -701,6 +711,8 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             dense=False,
+            text_size=13,
+            label_style=ft.TextStyle(size=11),
         )
         self.zoom_pressure_min_field = ft.TextField(
             width=120,
@@ -710,6 +722,8 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             dense=False,
+            text_size=13,
+            label_style=ft.TextStyle(size=11),
         )
         self.zoom_pressure_max_field = ft.TextField(
             width=120,
@@ -719,6 +733,8 @@ class PressureGradientApp:
             bgcolor=BRAND_BG_COLOR,
             border_color=BRAND_BORDER_COLOR,
             dense=False,
+            text_size=13,
+            label_style=ft.TextStyle(size=11),
         )
         self.auto_zoom_checkbox = ft.Checkbox(
             label="Auto Zoom", value=initial_auto_zoom, check_color=BRAND_GREEN
@@ -1117,7 +1133,7 @@ class PressureGradientApp:
                         "Data Input",
                         weight=ft.FontWeight.BOLD,
                         color=BRAND_DARK_GREEN,
-                        size=18,
+                        size=13,
                     ),
                     ft.Row(
                         controls=[
@@ -1130,10 +1146,10 @@ class PressureGradientApp:
                                 bgcolor=BRAND_GREEN,
                                 icon_color=BRAND_WHITE,
                                 tooltip="Add Point",
-                                style=ft.ButtonStyle(padding=ft.padding.all(10)),
+                                style=ft.ButtonStyle(padding=ft.padding.all(2)),
                             ),
                         ],
-                        spacing=12,
+                        spacing=4,
                         alignment=ft.MainAxisAlignment.START,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
@@ -1144,24 +1160,24 @@ class PressureGradientApp:
                                 on_click=self.open_bulk_dialog,
                                 bgcolor=BRAND_ACCENT_BLUE,
                                 color=BRAND_WHITE,
-                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=6, vertical=4)),
                             ),
                             ft.ElevatedButton(
                                 "Save Points",
                                 on_click=self.save_data,
                                 bgcolor=BRAND_ACCENT_PURPLE,
                                 color=BRAND_WHITE,
-                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=6, vertical=4)),
                             ),
                             ft.ElevatedButton(
                                 "Clear All Points",
                                 on_click=self.clear_table,
                                 bgcolor=BRAND_ACCENT_ORANGE,
                                 color=BRAND_WHITE,
-                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=6, vertical=4)),
                             ),
                         ],
-                        spacing=12,
+                        spacing=4,
                         alignment=ft.MainAxisAlignment.START,
                     ),
                     ft.Divider(),
@@ -1169,7 +1185,7 @@ class PressureGradientApp:
                         "Settings",
                         weight=ft.FontWeight.BOLD,
                         color=BRAND_DARK_GREEN,
-                        size=18,
+                        size=13,
                     ),
                     ft.Row(
                         controls=[
@@ -1180,20 +1196,22 @@ class PressureGradientApp:
                                 on_click=self.manual_save_state,
                                 bgcolor=BRAND_DARK_GRAY,
                                 color=BRAND_WHITE,
-                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=18, vertical=12)),
+                                style=ft.ButtonStyle(padding=ft.padding.symmetric(horizontal=6, vertical=4)),
                             ),
                         ],
-                        spacing=12,
+                        spacing=4,
                         alignment=ft.MainAxisAlignment.START,
                     ),
                 ],
-                spacing=18,
+                spacing=6,
             ),
-            padding=12,
-            border_radius=10,
+            padding=2,
+            border_radius=6,
             border=ft.border.all(1, BRAND_BORDER_COLOR),
             bgcolor=BRAND_SECONDARY_BG_COLOR,
             expand=True,
+            width=320,
+            margin=ft.margin.only(top=2, bottom=2),
         )
 
         plot_area = ft.Container(
