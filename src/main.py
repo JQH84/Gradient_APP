@@ -403,7 +403,7 @@ def create_empty_plot():
     # Returns a placeholder for the Flet chart area
     return ft.Container(ft.Text("Add pressure points to view plot", color=BRAND_GRAY, size=18), alignment=ft.alignment.center, height=400)
 
-def render_matplotlib_plot(points, stats):
+def render_matplotlib_plot(points, stats, axis_limits=None):
     fig, ax = plt.subplots(figsize=(8, 6))
     if not points:
         ax.text(0.5, 0.5, "Add pressure points to view plot", ha="center", va="center", fontsize=14, color="gray")
@@ -426,6 +426,18 @@ def render_matplotlib_plot(points, stats):
         ax.invert_yaxis()
         ax.grid(True)
         ax.legend()
+        # Apply axis limits if provided
+        if axis_limits:
+            if axis_limits.get("min_pressure") is not None or axis_limits.get("max_pressure") is not None:
+                ax.set_xlim(
+                    left=axis_limits.get("min_pressure", min(all_pressure)),
+                    right=axis_limits.get("max_pressure", max(all_pressure))
+                )
+            if axis_limits.get("min_tvd") is not None or axis_limits.get("max_tvd") is not None:
+                ax.set_ylim(
+                    top=axis_limits.get("min_tvd", min(all_tvd)),
+                    bottom=axis_limits.get("max_tvd", max(all_tvd))
+                )
     buf = io.BytesIO()
     plt.tight_layout()
     plt.savefig(buf, format="png")
@@ -973,14 +985,52 @@ class PressureGradientApp:
                 )
 
     def update_plot(self, _=None):
-        """Update the plot with the current data using matplotlib and display as image in Flet"""
-        selected_points = [p for p in self.points if p.selected]
+        """Update the plot with the current data using matplotlib and display as image in Flet, applying zoom controls."""
+        # Get zoom controls
+        min_tvd = self.zoom_min_field.value.strip()
+        max_tvd = self.zoom_max_field.value.strip()
+        min_pressure = self.zoom_pressure_min_field.value.strip()
+        max_pressure = self.zoom_pressure_max_field.value.strip()
+
+        def parse_float(val):
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
+
+        min_tvd = parse_float(min_tvd)
+        max_tvd = parse_float(max_tvd)
+        min_pressure = parse_float(min_pressure)
+        max_pressure = parse_float(max_pressure)
+
+        # Filter points according to zoom controls
+        filtered_points = []
+        for p in self.points:
+            if min_tvd is not None and p.tvd < min_tvd:
+                continue
+            if max_tvd is not None and p.tvd > max_tvd:
+                continue
+            if min_pressure is not None and p.pressure < min_pressure:
+                continue
+            if max_pressure is not None and p.pressure > max_pressure:
+                continue
+            filtered_points.append(p)
+
+        selected_points = [p for p in filtered_points if p.selected]
         stats = calculate_gradient_statistics(selected_points)
 
-        if not self.points:
+        # Pass axis limits to the plot
+        axis_limits = {
+            "min_tvd": min_tvd,
+            "max_tvd": max_tvd,
+            "min_pressure": min_pressure,
+            "max_pressure": max_pressure,
+        }
+
+        if not filtered_points:
             self.plot_container.content = create_empty_plot()
         else:
-            img_base64 = render_matplotlib_plot(self.points, stats)
+            img_base64 = render_matplotlib_plot(filtered_points, stats, axis_limits)
             self.plot_container.content = ft.Image(src_base64=img_base64, width=800, height=500, fit=ft.ImageFit.CONTAIN)
 
         self.update_statistics_card(stats, selected_points)
